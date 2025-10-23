@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organisateur de Tournoi de Tennis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; }
+        .bracket { display: flex; overflow-x: auto; padding: 20px; background-color: #f9fafb; border-radius: 0.5rem; }
+        .round { display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; min-width: 260px; padding: 0 10px; }
+        .matchup { display: flex; flex-direction: column; justify-content: center; padding: 12px 0; position: relative; margin-bottom: 10px; } /* Ajout margin-bottom */
+        .matchup-content {
+            background-color: #fff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 10px; /* Moins de padding */
+            width: 100%; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); transition: all 0.2s ease;
+        }
+        .matchup-content.is-winner { border-width: 2px; border-color: #16a34a; background-color: #f0fdf4; }
+        .matchup-content.is-loser { opacity: 0.6; }
+        
+        .player { font-size: 0.8rem; padding: 4px; display: flex; justify-content: space-between; align-items: center; } /* Taille réduite */
+        .player-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .player-winner .player-name { font-weight: 700; color: #15803d; }
+        .player-loser .player-name { text-decoration: line-through; color: #737373; }
+        
+        .match-details { font-size: 0.7rem; color: #4a5568; border-top: 1px dashed #e2e8f0; padding-top: 5px; margin-top: 5px; } /* Taille réduite */
+        
+        .match-admin-controls { margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px; }
+        .admin-score-input { width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 3px 5px; font-size: 0.7rem; margin-top: 3px; }
+        .admin-winner-select { width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 3px 5px; font-size: 0.7rem; background-color: #f8f8f8; }
+        .admin-save-score-btn {
+            font-size: 0.7rem; padding: 3px 6px; border-radius: 4px;
+            background-color: #2563eb; color: white; cursor: pointer; transition: all 0.2s ease;
+            width: 100%; margin-top: 5px; border: none;
+        }
+        .admin-save-score-btn:hover { background-color: #1d4ed8; }
+
+        /* Lignes de connexion (légèrement ajustées pour l'espacement) */
+        .round-connector { position: absolute; top: 50%; right: -15px; width: 15px; height: 2px; background-color: #9ca3af; }
+        .round-final .round-connector { display: none; }
+        .matchup-connector { position: absolute; top: 50%; left: -15px; width: 15px; height: 50%; border-left: 2px solid #9ca3af; }
+        .matchup:nth-child(odd) .matchup-connector { border-top: 2px solid #9ca3af; transform: translateY(-1px); /* Ajustement pixel */ }
+        .matchup:nth-child(even) .matchup-connector { border-bottom: 2px solid #9ca3af; transform: translateY(1px); /* Ajustement pixel */ }
+        .round-1 .matchup-connector { display: none; } /* Pas de connecteur avant le premier tour */
+
+        /* Ajustement dynamique hauteur connecteur */
+        .round-3 .matchup-connector { height: calc(100% + 10px); } /* 10px = margin-bottom matchup */
+        .round-4 .matchup-connector { height: calc(200% + 30px); } /* 3 * 10px */
+        .round-5 .matchup-connector { height: calc(400% + 70px); } /* 7 * 10px */
+        /* ... ajouter si plus de tours ... */
+
+        .champion { justify-content: center; align-items: center; }
+        .champion .matchup-content { border-color: #2563eb; border-width: 2px; }
+
+        /* Modal */
+        .modal { transition: opacity 0.3s ease, visibility 0.3s; }
+        .modal.hidden { opacity: 0; visibility: hidden; }
+        
+        /* Cacher les vues */
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        /* Helper pour cacher/montrer boutons/sections */
+        .hidden-player { display: none; }
+        .hidden-section { display: none; } /* Classe générique */
+
+        /* Styles additionnels pour clarté UI */
+        .card { background-color: white; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); margin-bottom: 1.5rem; padding: 1.5rem; }
+        .card-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; color: #1e3a8a; } /* Bleu plus foncé */
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-4 md:p-8">
+
+    <!-- Modals (identiques) -->
+    <div id="message-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"> <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full"> <h3 id="message-title" class="text-xl font-semibold mb-3">Message</h3> <p id="message-text" class="text-gray-600 mb-5">Contenu</p> <button id="message-close-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"> Fermer </button> </div> </div>
+    <div id="confirm-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"> <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full"> <h3 id="confirm-title" class="text-xl font-semibold mb-3">Confirmation</h3> <p id="confirm-text" class="text-gray-600 mb-5">Sûr ?</p> <div class="flex justify-end gap-3"> <button id="confirm-cancel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg"> Annuler </button> <button id="confirm-ok-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"> Confirmer </button> </div> </div> </div>
+    <div id="admin-login-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"> <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full"> <h3 class="text-xl font-semibold mb-4">Accès Juge-Arbitre</h3> <form id="admin-login-form"> <div class="space-y-4"> <div> <label for="admin-username" class="block text-sm font-medium text-gray-700 mb-1">Identifiant</label> <input type="text" id="admin-username" class="w-full px-3 py-2 border rounded-md shadow-sm" required> </div> <div> <label for="admin-password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label> <input type="password" id="admin-password" class="w-full px-3 py-2 border rounded-md shadow-sm" required> </div> <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"> Connexion </button> <button type="button" id="admin-login-cancel-btn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2"> Annuler </button> </div> </form> </div> </div>
+
+    <!-- En-tête (identique) -->
+    <div class="max-w-screen-xl mx-auto">
+        <header class="flex flex-wrap justify-between items-center mb-8 gap-4">
+            <h1 class="text-4xl font-bold text-blue-700">Organisateur de Tournoi</h1>
+            <div id="user-navigation" class="flex gap-2 items-center">
+                <button id="my-account-btn" class="hidden-player bg-white hover:bg-gray-100 text-gray-800 font-bold py-2 px-4 rounded-lg border border-gray-300"> Mon Compte </button>
+                <button id="home-btn" class="hidden bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg"> Accueil </button>
+                <button id="toggle-view-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg"> Vue Juge-Arbitre </button>
+            </div>
+        </header>
+
+        <!-- Vue 0: Liste des Tournois (identique) -->
+        <section id="tournament-list-view" class="view active card">
+            <h2 class="card-title">Tournois Disponibles</h2>
+            <div id="tournament-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            <p id="no-tournaments-msg" class="text-gray-500 mt-4 hidden">Aucun tournoi.</p>
+        </section>
+
+        <!-- Vue 1: Vue Tournoi (Joueur) - Unifiée (ID: tournament-player-view) -->
+        <section id="tournament-player-view" class="view"> 
+            <h2 id="player-tournament-title" class="text-3xl font-bold mb-6 text-blue-800">...</h2>
+
+            <!-- Section Connexion/Inscription (initialement visible si non reconnu) -->
+            <div id="player-login-section" class="card hidden-section">
+                <h3 class="card-title">Inscription / Connexion Joueur</h3>
+                <p class="text-gray-600 mb-6">Entrez vos informations pour participer ou retrouver votre profil.</p>
+                <form id="player-login-form"> 
+                    <div class="space-y-4">
+                        <div> <label for="player-firstname" class="block text-sm font-medium mb-1">Prénom</label> <input type="text" id="player-firstname" class="w-full px-3 py-2 border rounded-md shadow-sm" placeholder="ex: Roger"> </div>
+                        <div> <label for="player-lastname" class="block text-sm font-medium mb-1">Nom</label> <input type="text" id="player-lastname" class="w-full px-3 py-2 border rounded-md shadow-sm" placeholder="ex: Federer"> </div>
+                        <div> <label for="player-tennup" class="block text-sm font-medium mb-1">Tenn'Up</label> <input type="text" id="player-tennup" class="w-full px-3 py-2 border rounded-md shadow-sm" placeholder="ex: 1234567"> </div>
+                        <div> <label for="player-phone" class="block text-sm font-medium mb-1">Téléphone</label> <input type="tel" id="player-phone" class="w-full px-3 py-2 border rounded-md shadow-sm" placeholder="ex: 0612345678"> </div>
+                        <button type="button" id="player-login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg shadow-lg"> Entrer dans le tournoi </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Section Gestion (initialement cachée si non reconnu) -->
+            <div id="player-management-section" class="hidden-section">
+                <div class="card">
+                    <h3 class="card-title">Actualités du Tournoi</h3>
+                    <div id="player-news-feed" class="space-y-4"> <p class="text-gray-500">Aucune actualité.</p> </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">Mon Prochain Match</h3>
+                    <div id="player-match-info" class="mb-4"></div>
+                    <button id="view-bracket-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                        Voir le Tableau Complet
+                    </button>
+                </div>
+                
+                <div id="availability-section" class="card hidden-section"> 
+                    <h3 class="card-title">Mes Disponibilités</h3>
+                    <div class="mb-4 p-4 bg-gray-50 rounded-lg shadow-inner"> <!-- Légère mise en valeur -->
+                        <h4 class="text-lg font-medium mb-2">Créneaux Horaires Proposés</h4>
+                        <div id="time-slots-legend" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    <div id="player-availability-inputs" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+                    <button id="player-save-btn" class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg shadow-lg"> Enregistrer mes disponibilités </button>
+                </div>
+
+                <div class="card bg-gray-50 border border-gray-200"> <!-- Card pour contact -->
+                    <h4 class="font-semibold text-gray-700">Besoin d'aide ?</h4> 
+                    <p class="text-sm text-gray-600">Contactez le JA: <a href="tel:+33767306420" class="text-blue-600 font-medium hover:underline">+33 7 67 30 64 20</a>.</p> 
+                </div>
+            </div>
+        </section>
+
+        <!-- Vue 3: Admin Dashboard (Structure Card) -->
+        <section id="admin-dashboard-view" class="view">
+            <h2 class="text-2xl font-semibold mb-6">Tableau de Bord Juge-Arbitre</h2>
+            <div class="card">
+                <h3 class="card-title">Créer un Nouveau Tournoi</h3>
+                <form id="create-tournament-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div> <label for="admin-title" class="block text-sm font-medium mb-1">Titre</label> <input type="text" id="admin-title" class="w-full border rounded-md p-2" required placeholder="Tournoi Printemps"> </div>
+                    <div> <label for="admin-image-url" class="block text-sm font-medium mb-1">URL Image (opt)</label> <input type="url" id="admin-image-url" class="w-full border rounded-md p-2" placeholder="https://..."> </div>
+                    <div> <label for="admin-max-players" class="block text-sm font-medium mb-1">Joueurs</label> <select id="admin-max-players" class="w-full border rounded-md p-2 bg-white"> <option value="8">8</option> <option value="16" selected>16</option> <option value="32">32</option> <option value="64">64</option> </select> </div>
+                    <div> <label for="admin-court-count" class="block text-sm font-medium mb-1">Terrains</label> <input type="number" id="admin-court-count" class="w-full border rounded-md p-2" value="4" min="1"> </div>
+                    <div> <label for="admin-day-count" class="block text-sm font-medium mb-1">Jours</label> <input type="number" id="admin-day-count" class="w-full border rounded-md p-2" value="2" min="1"> </div>
+                    <div> <label for="admin-matches-per-day" class="block text-sm font-medium mb-1">Matchs/jour/terr</label> <input type="number" id="admin-matches-per-day" class="w-full border rounded-md p-2" value="3" min="1"> </div>
+                    <div class="md:col-span-2"> <p class="text-sm text-gray-500">Planification basée sur ces paramètres.</p> </div>
+                    <button type="submit" class="w-full md:col-span-2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg shadow-lg"> Lancer le Tournoi </button>
+                </form>
+            </div>
+            <div class="card"> 
+                <h3 class="card-title">Gérer un Tournoi Existant</h3> 
+                <div id="admin-tournament-list" class="space-y-3"></div> 
+            </div>
+        </section>
+
+        <!-- Vue 4: Admin Gestion (Structure Card) -->
+        <section id="admin-management-view" class="view">
+            <h2 id="admin-manage-title" class="text-3xl font-bold mb-6 text-blue-800">Gestion: ...</h2>
+            <div id="admin-registration-panel" class="card bg-yellow-50 border-l-4 border-yellow-500 hidden"> <h3 class="card-title text-yellow-800">Inscriptions en cours</h3> <p class="text-lg mb-4">Inscrits: <span id="admin-player-count">...</span> / <span id="admin-max-player-count">...</span></p> <div id="admin-player-list" class="text-sm space-y-1 mb-4"></div> <button id="admin-generate-bracket-btn" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg shadow-lg"> Générer le Tableau </button> </div>
+            <div id="admin-news-panel" class="card hidden"> <h3 class="card-title">Publier une News</h3> <textarea id="admin-news-input" class="w-full border rounded-md p-2 mb-2" rows="3" placeholder="Annonce..."></textarea> <button id="admin-post-news-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg"> Publier </button> </div>
+            <div id="admin-scheduling-panel" class="card hidden"> <h3 class="card-title">Planification du Tour (<span id="admin-current-round"></span>)</h3> <button id="schedule-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-xl shadow-lg mb-6"> Générer le Planning </button> <div id="admin-schedule-output" class="space-y-3"></div> <div id="admin-conflicts-output" class="space-y-3 mt-4"></div> </div>
+            <!-- Bouton Voir Tableau pour Admin -->
+            <button id="admin-view-bracket-btn" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                Voir le Tableau
+            </button>
+        </section>
+
+        <!-- Vue 5: Tableau (Déplacé) - N'existe plus ici -->
+
+        <!-- Vue 6: Mon Compte (Structure Card) -->
+        <section id="my-dashboard-view" class="view">
+            <h2 class="text-3xl font-bold mb-6">Mon Compte</h2>
+            <div class="card"> <h3 class="card-title">Informations Reconnues</h3> <div id="dashboard-profile-info" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div> <p class="text-xs text-gray-500 mt-4">Infos mémorisées. Pour modifier, reconnectez-vous.</p> <button id="forget-me-btn" class="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm"> Oublier mes informations </button> </div>
+            <div class="card"> <h3 class="card-title">Mes Tournois Inscrits</h3> <div id="dashboard-tournaments-list" class="space-y-3"></div> </div>
+            <div class="card"> <h3 class="card-title">Mes Prochains Matchs</h3> <div id="dashboard-matches-list" class="space-y-3"></div> </div>
+        </section>
+
+        <!-- Vue 7: Tableau du Tournoi (Structure Card) -->
+        <section id="tournament-bracket-view" class="view card"> 
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="bracket-view-title" class="card-title mb-0">Tableau: ...</h2>
+                <button id="back-to-management-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">
+                    &laquo; Retour
+                </button>
+            </div>
+            <div class="bg-gray-50 p-2 md:p-4 rounded-lg shadow-inner overflow-hidden"> <!-- Fond légèrement grisé -->
+                <div id="bracket-output" class="bracket">
+                    <!-- Le tableau sera généré ici -->
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Script Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, updateDoc, onSnapshot, collection, setLogLevel, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Config & Vars Globales
+        const firebaseConfig = { apiKey: "AIzaSyCRC95XQSb7w7-u8wNsLdu-a2798cQG6ho", authDomain: "juge-arbitre.firebaseapp.com", projectId: "juge-arbitre", storageBucket: "juge-arbitre.firebasestorage.app", messagingSenderId: "1:1011697962039:web:b6ab15f2e93a9b7e5bc3b2", appId: "G-Z8JCL581GC" };
+        let db, auth, tournamentsCollectionRef, globalTournaments = [], selectedTournamentId = null, globalState = null, currentView = 'tournamentList', currentPlayer = null, rememberedPlayer = null, confirmCallback = null, tournamentListener = null, isAdminLoggedIn = false;
+        const LOCAL_STORAGE_KEY = 'tennisPlayerData';
+        const ADMIN_LOGGED_IN_KEY = 'isAdminLoggedIn'; // Clé pour mémoriser admin
+        const PROVISIONAL_AVAIL_KEY = 'provisional_first_round'; 
+
+        // --- INITIALISATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const app = initializeApp(firebaseConfig); db = getFirestore(app); auth = getAuth(app); setLogLevel('Debug');
+                tournamentsCollectionRef = collection(db, "tournaments");
+                
+                // Connexion anonyme - Essentielle pour les opérations Firestore publiques/protégées
+                // Si elle échoue, l'erreur auth/network-request-failed est typique si l'auth anonyme n'est pas activée
+                try {
+                    await signInAnonymously(auth); 
+                    console.log("Auth Anonyme OK, UID:", auth.currentUser?.uid);
+                } catch (authError) {
+                    console.error("Erreur d'authentification anonyme:", authError);
+                    // !!! POINT CRUCIAL POUR L'ERREUR network-request-failed !!!
+                    // Vérifiez que l'authentification anonyme est ACTIVÉE dans votre console Firebase -> Authentication -> Méthodes de connexion.
+                    showMessage("Erreur d'Authentification", "Impossible de se connecter au service. Vérifiez les paramètres d'authentification anonyme dans la console Firebase et votre connexion réseau.");
+                    return; // Bloquer le reste si l'auth échoue
+                }
+                
+                // Charger Joueur ET Admin Mémorisés
+                loadRememberedPlayer(); 
+                loadRememberedAdmin(); // NOUVEAU
+                
+                updateHeaderButtons(); 
+                startTournamentListener(); 
+                setupEventListeners();
+                
+                // Afficher la vue admin si mémorisée, sinon liste
+                setView(isAdminLoggedIn ? 'adminDashboard' : 'tournamentList'); 
+                
+            } catch (error) { console.error("Erreur init:", error); showMessage("Erreur critique", "Connexion BDD impossible."); }
+        });
+
+        function startTournamentListener() {
+            if (tournamentListener) tournamentListener(); 
+            tournamentListener = onSnapshot(tournamentsCollectionRef, (snapshot) => {
+                globalTournaments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Tournois chargés:", globalTournaments.length);
+                if (selectedTournamentId) globalState = globalTournaments.find(t => t.id === selectedTournamentId) || null;
+                
+                // Rafraîchissement intelligent (ne re-render que la vue actuelle si nécessaire)
+                switch (currentView) {
+                    case 'tournamentList': renderTournamentList(); break;
+                    // CORRECTION 1/4: Renommé 'tournamentPlayerView' en 'tournamentPlayer'
+                    case 'tournamentPlayer': if (globalState) renderTournamentPlayerView(); break;
+                    case 'adminDashboard': renderAdminDashboard(); break; // Toujours rafraîchir pour voir les nouveaux tournois
+                    case 'adminManagement': if (globalState) renderAdminManagementView(); break;
+                    case 'myDashboard': renderMyDashboardView(); break;
+                    case 'tournamentBracket': if (globalState) renderBracket(); break;
+                }
+            }, (error) => {
+                console.error("Erreur listener Firestore:", error);
+                showMessage("Erreur de connexion", "Impossible de récupérer les mises à jour des tournois.");
+            });
+        }
+        
+        function setupEventListeners() {
+            try {
+                // Modals (inchangés)
+                document.getElementById('message-close-btn').addEventListener('click', () => document.getElementById('message-modal').classList.add('hidden'));
+                document.getElementById('confirm-cancel-btn').addEventListener('click', () => { document.getElementById('confirm-modal').classList.add('hidden'); confirmCallback = null; });
+                document.getElementById('confirm-ok-btn').addEventListener('click', () => { if (confirmCallback) confirmCallback(); document.getElementById('confirm-modal').classList.add('hidden'); confirmCallback = null; });
+                document.getElementById('admin-login-form').addEventListener('submit', handleAdminLogin);
+                document.getElementById('admin-login-cancel-btn').addEventListener('click', () => document.getElementById('admin-login-modal').classList.add('hidden'));
+
+                // Navigation
+                document.getElementById('home-btn').addEventListener('click', goToHome);
+                document.getElementById('toggle-view-btn').addEventListener('click', toggleAdminView); 
+                document.getElementById('my-account-btn').addEventListener('click', () => setView('myDashboard')); 
+                // Boutons Tableau
+                document.getElementById('view-bracket-btn').addEventListener('click', () => setView('tournamentBracket'));
+                document.getElementById('admin-view-bracket-btn').addEventListener('click', () => setView('tournamentBracket'));
+                document.getElementById('back-to-management-btn').addEventListener('click', () => {
+                    if (isAdminLoggedIn) setView('adminManagement'); 
+                    // CORRECTION 2/4: Renommé 'tournamentPlayerView' en 'tournamentPlayer'
+                    else if (currentPlayer) setView('tournamentPlayer'); 
+                    else goToHome(); 
+                }); 
+
+                // Admin (inchangés)
+                document.getElementById('create-tournament-form').addEventListener('submit', handleAdminCreateTournament);
+                document.getElementById('schedule-btn').addEventListener('click', generateScheduleForCurrentRound);
+                document.getElementById('admin-generate-bracket-btn').addEventListener('click', handleGenerateBracket);
+                document.getElementById('admin-post-news-btn').addEventListener('click', handleAdminPostNews);
+                
+                // Joueur (inchangés)
+                document.getElementById('player-login-btn').addEventListener('click', handlePlayerLoginOrRegister);
+                document.getElementById('player-save-btn').addEventListener('click', handlePlayerSaveAvailability);
+
+                // Dashboard (inchangé)
+                document.getElementById('forget-me-btn').addEventListener('click', forgetRememberedPlayer);
+
+                console.log("Listeners OK.");
+            } catch (error) { console.error("Erreur listeners:", error); showMessage("Erreur", "Init contrôles impossible."); }
+        }
+
+        // --- Gestion localStorage ---
+        function saveRememberedPlayer(pData) { try { const d = { firstName: pData.firstName, lastName: pData.lastName, tennupId: pData.tennupId, phone: pData.phone }; localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(d)); rememberedPlayer = d; updateHeaderButtons(); console.log("Joueur mémorisé:", rememberedPlayer); } catch (e) { console.error("Err save LS Player:", e); } }
+        function loadRememberedPlayer() { try { const s = localStorage.getItem(LOCAL_STORAGE_KEY); rememberedPlayer = s ? JSON.parse(s) : null; if(rememberedPlayer) console.log("Joueur chargé:", rememberedPlayer); } catch (e) { console.error("Err load LS Player:", e); rememberedPlayer = null; } }
+        function forgetRememberedPlayer() { try { localStorage.removeItem(LOCAL_STORAGE_KEY); rememberedPlayer = null; currentPlayer = null; updateHeaderButtons(); showMessage("Infos oubliées", "Infos joueur supprimées."); goToHome(); } catch (e) { console.error("Err suppr LS Player:", e); } }
+        // NOUVEAU: Mémorisation Admin
+        function saveRememberedAdmin() { try { localStorage.setItem(ADMIN_LOGGED_IN_KEY, 'true'); console.log("Admin mémorisé"); } catch (e) { console.error("Err save LS Admin:", e); } }
+        function loadRememberedAdmin() { try { isAdminLoggedIn = localStorage.getItem(ADMIN_LOGGED_IN_KEY) === 'true'; if (isAdminLoggedIn) console.log("Admin chargé"); } catch (e) { console.error("Err load LS Admin:", e); isAdminLoggedIn = false; } }
+        function forgetRememberedAdmin() { try { localStorage.removeItem(ADMIN_LOGGED_IN_KEY); isAdminLoggedIn = false; console.log("Admin oublié"); } catch (e) { console.error("Err suppr LS Admin:", e); } }
+
+        // --- Logique d'en-tête (mise à jour pour admin) ---
+        function updateHeaderButtons() { 
+            const isAdminView = currentView === 'adminDashboard' || currentView === 'adminManagement'; 
+            document.getElementById('my-account-btn').classList.toggle('hidden-player', !rememberedPlayer || isAdminLoggedIn); // Cache si admin est loggé
+            const adminBtn = document.getElementById('toggle-view-btn'); 
+            adminBtn.innerText = isAdminLoggedIn ? 'Quitter Vue Admin' : 'Vue Juge-Arbitre'; 
+            adminBtn.style.display = 'inline-block'; 
+        }
+
+        // --- Logique Connexion Admin (mise à jour pour mémorisation) ---
+        function handleAdminLogin(e) { 
+            e.preventDefault(); 
+            const u = document.getElementById('admin-username').value, p = document.getElementById('admin-password').value; 
+            if (u === "Corbron.clement@laposte.net" && p === "Apple072005") { 
+                isAdminLoggedIn = true; 
+                saveRememberedAdmin(); // Sauvegarde la connexion admin
+                document.getElementById('admin-login-modal').classList.add('hidden'); 
+                document.getElementById('admin-login-form').reset(); 
+                selectedTournamentId = null; globalState = null; currentPlayer = null; 
+                setView('adminDashboard'); 
+                // updateHeaderButtons est appelé par setView
+            } else { 
+                showMessage("Erreur", "Identifiants incorrects."); 
+            } 
+        }
+
+        // --- LOGIQUE DE VUES ---
+        function camelToKebab(str) {
+            // Convertit camelCase en kebab-case
+            return str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+        }
+        
+        function setView(viewName) {
+            console.log("setView attempting to activate:", viewName); 
+            // CORRECTION FINALE : L'ID HTML est kebab-case + '-view'
+            const viewId = `${camelToKebab(viewName)}-view`; 
+            
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            const targetView = document.getElementById(viewId); 
+            
+            if (targetView) {
+                targetView.classList.add('active'); 
+                console.log("Successfully activated view:", viewId); 
+            } else { 
+                // Log plus détaillé
+                console.error(`View element not found for ID: #${viewId} (derived from viewName: ${viewName})`); 
+                if (viewName !== 'tournamentList') {
+                    // Fallback vers la liste SANS relancer setView immédiatement pour éviter boucle infinie
+                    currentView = 'tournamentList'; // Met à jour l'état interne
+                    document.getElementById('tournament-list-view')?.classList.add('active'); // Active manuellement la vue fallback
+                    console.warn("Falling back to tournament-list-view");
+                    renderTournamentList(); // Affiche le contenu fallback
+                } else {
+                    // Si même la liste est introuvable, c'est un problème HTML
+                    showMessage("Erreur Critique", "Vue principale (tournament-list-view) introuvable. Vérifiez le HTML.");
+                }
+                updateHeaderButtons(); // Assure que les boutons sont corrects même après fallback
+                return; // Stop execution here after fallback
+            }
+            
+            const previousView = currentView; 
+            currentView = viewName;
+            document.getElementById('home-btn').classList.toggle('hidden', viewName === 'tournamentList');
+            updateHeaderButtons(); 
+            
+            // Render uniquement si la vue change réellement et n'est pas déjà en cours de rendu
+            // Évite les rendus multiples si onSnapshot rafraîchit pendant un changement de vue
+            if (previousView !== viewName) {
+                renderCurrentView(); 
+            }
+        }
+        
+        // CORRECTION: goToHome doit oublier l'admin aussi
+        function goToHome() { 
+            selectedTournamentId = null; 
+            globalState = null; 
+            currentPlayer = null; 
+            if (isAdminLoggedIn) { // Si on quitte via Accueil en étant admin
+                forgetRememberedAdmin(); 
+            }
+            isAdminLoggedIn = false; 
+            setView('tournamentList'); 
+        }
+
+        // CORRECTION: toggleAdminView doit oublier l'admin
+        function toggleAdminView() { 
+            if (isAdminLoggedIn) { 
+                forgetRememberedAdmin(); // Oublie l'admin quand on quitte
+                isAdminLoggedIn = false; 
+                goToHome(); // Retourne à l'accueil standard
+            } else { 
+                document.getElementById('admin-login-modal').classList.remove('hidden'); 
+            } 
+        }
+
+        function renderCurrentView() {
+            console.log(`Render demandé pour vue: ${currentView}`);
+            // Cacher panneaux admin par défaut
+            document.getElementById('admin-registration-panel')?.classList.add('hidden'); 
+            document.getElementById('admin-scheduling-panel')?.classList.add('hidden');
+            document.getElementById('admin-news-panel')?.classList.add('hidden');
+
+            switch (currentView) {
+                case 'tournamentList': renderTournamentList(); break;
+                // CORRECTION 3/4: Renommé 'tournamentPlayerView' en 'tournamentPlayer'
+                case 'tournamentPlayer': renderTournamentPlayerView(); break;
+                case 'adminDashboard': renderAdminDashboard(); break;
+                case 'adminManagement': renderAdminManagementView(); break; 
+                case 'myDashboard': renderMyDashboardView(); break; 
+                case 'tournamentBracket': renderBracket(); break; 
+                default: console.warn("Vue inconnue à rendre:", currentView); setView('tournamentList'); // Fallback
+            }
+        }
+        
+        // --- VUE 0: LISTE TOURNOIS (Identique, mais event listener vérifié) ---
+        function renderTournamentList() { 
+            const c=document.getElementById('tournament-list-container'), m=document.getElementById('no-tournaments-msg'); 
+            c.innerHTML=''; 
+            if(!globalTournaments || globalTournaments.length===0){ m.style.display='block'; return; } 
+            m.style.display='none'; 
+            globalTournaments.forEach(t=>{ 
+                const card=document.createElement('div'); 
+                card.className='bg-white p-4 rounded-lg shadow cursor-pointer transition-transform transform hover:scale-105'; // Ajout transition
+                const imgUrl=t.imageUrl || `https://placehold.co/600x400/eee/aaa?text=${encodeURIComponent(t.title)}`; 
+                let s='', clr='text-green-600'; 
+                if(t.currentRound==='Inscription') s=`Inscriptions (${(t.players||[]).length}/${t.maxPlayers})`; 
+                else if(t.currentRound==='Terminé'){ s='Terminé'; clr='text-gray-500'; } 
+                else { s=`En cours: ${t.currentRound}`; clr='text-blue-600'; } 
+                card.innerHTML=`<img src="${imgUrl}" alt="Image" class="w-full h-32 object-cover rounded mb-3" onerror="this.onerror=null; this.src='https://placehold.co/600x400/eee/aaa?text=Img';"> <h3 class="text-lg font-bold mb-1">${t.title}</h3> <p class="text-sm font-semibold ${clr}">${s}</p>`; 
+                // Assurer que le listener est bien attaché
+                card.removeEventListener('click', handleTournamentCardClick); // Evite doublons si re-render rapide
+                card.addEventListener('click', handleTournamentCardClick); 
+                card.dataset.tournamentId = t.id; // Stocker l'ID pour le handler
+                c.appendChild(card); 
+            }); 
+        }
+        // Handler pour clarifier la sélection
+        function handleTournamentCardClick(event) {
+            const tournamentId = event.currentTarget.dataset.tournamentId;
+            if (tournamentId) {
+                selectTournament(tournamentId, 'player');
+            } else {
+                console.error("ID de tournoi manquant sur la carte cliquée.");
+            }
+        }
+        
+        // --- SELECTION TOURNOI ET VUE UNIFIÉE JOUEUR (Identique) ---
+        function selectTournament(id, role) { 
+            console.log("selectTournament:", id, role); // Debug
+            selectedTournamentId = id; 
+            globalState = globalTournaments.find(t => t.id === id); 
+            if (!globalState) { console.error("Tournoi non trouvé:", id); goToHome(); return; } 
+            
+            if (role === 'player') { 
+                currentPlayer = null; 
+                if (rememberedPlayer) {
+                    const matched = findFuzzyPlayerInTournament(rememberedPlayer, globalState);
+                    if (matched) { 
+                        currentPlayer = matched; 
+                        console.log("Auto-identifié:", currentPlayer);
+                    }
+                }
+                // CORRECTION 4/4: Renommé 'tournamentPlayerView' en 'tournamentPlayer'
+                setView('tournamentPlayer'); 
+            } else if (role === 'admin') { 
+                setView('adminManagement'); 
+            } 
+        }
+
+        // --- RENDER VUE JOUEUR (Identique) ---
+        function renderTournamentPlayerView() {
+            if (!globalState) { console.warn("renderTournamentPlayerView appelé sans globalState"); goToHome(); return; } 
+            document.getElementById('player-tournament-title').innerText = globalState.title;
+
+            const loginSection = document.getElementById('player-login-section');
+            const managementSection = document.getElementById('player-management-section');
+
+            if (!currentPlayer && rememberedPlayer) {
+                currentPlayer = findFuzzyPlayerInTournament(rememberedPlayer, globalState);
+            }
+
+            if (currentPlayer) {
+                loginSection.classList.add('hidden-section');
+                managementSection.classList.remove('hidden-section');
+                
+                const newsEl = document.getElementById('player-news-feed'); newsEl.innerHTML = ''; (globalState.news || []).slice(0, 5).forEach(item => { const date = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '...'; newsEl.innerHTML += `<div class="bg-blue-50 p-3 rounded shadow-sm border-l-4 border-blue-500 mb-3"><p class="text-sm">${item.text}</p><p class="text-xs text-gray-500 mt-1 text-right">${date}</p></div>`; }); if (!newsEl.innerHTML) newsEl.innerHTML = '<p class="text-gray-500 text-sm">Aucune actualité.</p>';
+                
+                const currentRound = globalState.currentRound;
+                const myMatch = (globalState.matches || []).find(m => m.round === currentRound && !m.winnerId && (m.player1Id === currentPlayer.id || m.player2Id === currentPlayer.id)); // Cherche match non fini du tour actuel
+                const infoEl = document.getElementById('player-match-info'); infoEl.innerHTML = ''; 
+                
+                if (myMatch) { 
+                    const oppId = (myMatch.player1Id === currentPlayer.id) ? myMatch.player2Id : myMatch.player1Id; 
+                    const opp = getPlayerById(oppId); 
+                    const oppName = opp ? `${opp.firstName} ${opp.lastName}` : "Adversaire à déterminer"; 
+                    let schedInfo = (myMatch.timeSlot && myMatch.court) ? `Planifié: <strong class="text-indigo-700">${myMatch.timeSlot}</strong> sur <strong class="text-indigo-700">${myMatch.court}</strong>` : "<span class='text-orange-600 font-medium'>Match non planifié.</span>"; 
+                    infoEl.innerHTML = `<p class="text-gray-700 mb-1">Tour Actuel: <strong class="font-semibold">${currentRound}</strong></p> <p class="text-gray-700 mb-1">Votre Adversaire: <strong class="font-semibold">${oppName}</strong></p> <p class="text-gray-700 text-sm">${schedInfo}</p>`; 
+                } else if (currentRound === 'Inscription') { 
+                    infoEl.innerHTML = `<p class="text-green-700 font-medium">Vous êtes bien inscrit. Le tableau sera bientôt généré.</p>`; 
+                } else if (currentRound === 'Terminé') { 
+                    infoEl.innerHTML = `<p class="text-gray-600 font-medium">Le tournoi est terminé. Merci de votre participation !</p>`; 
+                } else { 
+                    const lastMatch = [...(globalState.matches || [])].reverse().find(m => m.player1Id === currentPlayer.id || m.player2Id === currentPlayer.id);
+                    if (lastMatch && lastMatch.winnerId && lastMatch.winnerId !== currentPlayer.id) {
+                        infoEl.innerHTML = `<p class="text-red-700 font-medium">Vous avez été éliminé au tour '${lastMatch.round}'. Merci d'avoir joué !</p>`; 
+                    } else if (lastMatch && lastMatch.winnerId === currentPlayer.id && lastMatch.round !== 'Finale') {
+                        infoEl.innerHTML = `<p class="text-blue-700 font-medium">Bravo ! En attente du prochain tour (${getRounds(globalState.maxPlayers)[getRounds(globalState.maxPlayers).indexOf(lastMatch.round)+1] || '?'})...</p>`; 
+                    } else {
+                        infoEl.innerHTML = `<p class="text-blue-700 font-medium">En attente de la planification des matchs pour le tour: ${currentRound}.</p>`; 
+                    }
+                }
+
+                const showAvail = currentRound !== 'Terminé';
+                document.getElementById('availability-section').classList.toggle('hidden-section', !showAvail);
+                
+                if (showAvail) {
+                    const timeSlots = globalState.timeSlots || []; 
+                    const legendEl = document.getElementById('time-slots-legend'); const inputsEl = document.getElementById('player-availability-inputs'); legendEl.innerHTML = ''; inputsEl.innerHTML = '';
+                    
+                    const availKey = currentRound === 'Inscription' ? PROVISIONAL_AVAIL_KEY : currentRound;
+                    const savedAvail = (currentPlayer.availability && currentPlayer.availability[availKey]) ? currentPlayer.availability[availKey] : [];
+                    
+                    timeSlots.forEach(slot => { legendEl.innerHTML += `<span class="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs">${slot}</span>`; const isChecked = savedAvail.includes(slot); inputsEl.innerHTML += `<label class="flex items-center space-x-2 p-2 bg-gray-50 rounded border hover:bg-gray-100 cursor-pointer"><input type="checkbox" class="time-slot-cb h-4 w-4 text-blue-600 rounded focus:ring-blue-500" value="${slot}" ${isChecked ? 'checked' : ''}><span class="text-sm">${slot}</span></label>`; });
+                }
+
+            } else {
+                loginSection.classList.remove('hidden-section');
+                managementSection.classList.add('hidden-section');
+                
+                const form = document.getElementById('player-login-form');
+                if (rememberedPlayer) {
+                    document.getElementById('player-firstname').value = rememberedPlayer.firstName || ''; 
+                    document.getElementById('player-lastname').value = rememberedPlayer.lastName || ''; 
+                    document.getElementById('player-tennup').value = rememberedPlayer.tennupId || ''; 
+                    document.getElementById('player-phone').value = rememberedPlayer.phone || '';
+                } else if (form) {
+                    form.reset(); 
+                }
+            }
+        }
+
+        // --- Helper Fuzzy Match (identique) ---
+        function findFuzzyPlayerInTournament(pData, t) { if (!pData || !t || !t.players) return null; const name = `${pData.firstName} ${pData.lastName}`.toLowerCase(), tenId = String(pData.tennupId).toLowerCase(), TH = 2; return t.players.find(p => { const pName = `${p.firstName} ${p.lastName}`.toLowerCase(), pTenId = String(p.tennupId).toLowerCase(); return levenshteinDistance(name, pName) <= TH && levenshteinDistance(tenId, pTenId) <= TH; }); }
+
+        // --- LOGIN/INSCRIPTION JOUEUR (Identique) ---
+        async function handlePlayerLoginOrRegister() { 
+            const fN=document.getElementById('player-firstname').value.trim(), lN=document.getElementById('player-lastname').value.trim(), tId=document.getElementById('player-tennup').value.trim(), ph=document.getElementById('player-phone').value.trim(); 
+            if (!fN || !lN || !tId || !ph) { showMessage("Erreur", "Champs requis."); return; } 
+            if (!globalState) { showMessage("Erreur", "Aucun tournoi."); return; } 
+            const pData={firstName: fN, lastName: lN, tennupId: tId, phone: ph}; 
+            const tRef=doc(db, "tournaments", selectedTournamentId); 
+            let foundP = findFuzzyPlayerInTournament(pData, globalState); 
+            
+            if (foundP) { 
+                currentPlayer = foundP; 
+                if (ph && foundP.phone !== ph) { 
+                    const uP = { ...foundP, phone: ph }; const pIdx = globalState.players.findIndex(p => p.id === foundP.id); if (pIdx > -1) { const uPs = [...globalState.players]; uPs[pIdx] = uP; updateDoc(tRef, { players: uPs }).catch(err => console.error("Err tel", err)); currentPlayer = uP; }
+                } 
+                saveRememberedPlayer(currentPlayer); console.log("Connecté:", currentPlayer); 
+                renderTournamentPlayerView(); 
+            } else { 
+                if (globalState.currentRound !== 'Inscription') { showMessage("Fermées", "Inscriptions finies."); return; } 
+                if (globalState.players.length >= globalState.maxPlayers) { showMessage("Complet", "Plus de place."); return; } 
+                const newP = { ...pData, id: `player_${Date.now()}_${Math.random().toString(16).slice(2)}`, availability: {} }; // ID plus unique
+                try { 
+                    const uPs = [...globalState.players, newP]; await updateDoc(tRef, { players: uPs }); 
+                    currentPlayer = newP; saveRememberedPlayer(currentPlayer); showMessage("Inscrit!", `Bienvenue, ${fN} !`); 
+                    renderTournamentPlayerView(); 
+                } catch (err) { console.error("Err inscr:", err); showMessage("Erreur", "Inscr. impossible."); } 
+            } 
+        }
+
+        // --- SAUVEGARDE DISPOS JOUEUR (Identique) ---
+        async function handlePlayerSaveAvailability() { 
+            if (!globalState || !currentPlayer) return; 
+            const currentRound = globalState.currentRound; 
+            const checkboxes = document.querySelectorAll('#player-availability-inputs .time-slot-cb:checked'); 
+            const selectedSlots = Array.from(checkboxes).map(cb => cb.value); 
+            
+            const availKey = currentRound === 'Inscription' ? PROVISIONAL_AVAIL_KEY : currentRound;
+            
+            if (!currentPlayer.availability) currentPlayer.availability = {}; 
+            currentPlayer.availability[availKey] = selectedSlots; 
+            
+            const pIndex = globalState.players.findIndex(p => p.id === currentPlayer.id); 
+            if (pIndex === -1) { console.error("Joueur local non trouvé"); return; } 
+            // Créer une NOUVELLE copie pour la mise à jour Firestore
+            const updatedPlayer = { ...currentPlayer }; 
+            const updatedPlayers = [...globalState.players]; 
+            updatedPlayers[pIndex] = updatedPlayer; 
+            
+            try { 
+                await updateDoc(doc(db, "tournaments", selectedTournamentId), { players: updatedPlayers }); 
+                showMessage("Dispos enregistrées", `Dispos pour ${availKey === PROVISIONAL_AVAIL_KEY ? 'premier tour (provisoire)' : currentRound} MàJ.`); 
+            } catch (error) { 
+                console.error("Erreur save dispos:", error); 
+                showMessage("Erreur", "Enregistrement impossible."); 
+                // Ne pas modifier currentPlayer ici, laisser onSnapshot corriger
+            } 
+        }
+        
+        // --- Vue 6 (Mon Compte) (Identique) ---
+        function renderMyDashboardView() { if (!rememberedPlayer) { showMessage("Non identifié", "Infos non mémorisées."); setView('tournamentList'); return; } document.getElementById('dashboard-profile-info').innerHTML = `<div><span class="font-medium">Prénom:</span> ${rememberedPlayer.firstName}</div><div><span class="font-medium">Nom:</span> ${rememberedPlayer.lastName}</div><div><span class="font-medium">Tenn'Up:</span> ${rememberedPlayer.tennupId}</div><div><span class="font-medium">Tél:</span> ${rememberedPlayer.phone}</div>`; const myTs = globalTournaments.filter(t => findFuzzyPlayerInTournament(rememberedPlayer, t)); const tListEl = document.getElementById('dashboard-tournaments-list'); tListEl.innerHTML = ''; if (myTs.length === 0) tListEl.innerHTML = '<p class="text-gray-500">Aucun tournoi.</p>'; else { myTs.forEach(t => { tListEl.innerHTML += `<div class="flex justify-between items-center bg-gray-50 p-3 rounded cursor-pointer hover:bg-gray-100" data-tournament-id="${t.id}"><span class="font-medium">${t.title}</span><span class="text-sm">(${t.currentRound})</span><span class="text-blue-600 text-sm">Voir &raquo;</span></div>`; }); tListEl.querySelectorAll('[data-tournament-id]').forEach(el => { el.removeEventListener('click', handleTournamentCardClick); el.addEventListener('click', handleTournamentCardClick); }); } const myMs = []; myTs.forEach(t => { const pInT = findFuzzyPlayerInTournament(rememberedPlayer, t); if (!pInT) return; const m = (t.matches||[]).find(m => m.round === t.currentRound && !m.winnerId && (m.player1Id === pInT.id || m.player2Id === pInT.id)); if (m) myMs.push({ t, match: m, pInTId: pInT.id }); }); const mListEl = document.getElementById('dashboard-matches-list'); mListEl.innerHTML = ''; if (myMs.length === 0) mListEl.innerHTML = '<p class="text-gray-500">Aucun match à venir.</p>'; else { myMs.forEach(item => { const oppId = (item.match.player1Id === item.pInTId) ? item.match.player2Id : item.match.player1Id; const opp = getPlayerById(oppId, item.t); const oppN = opp ? `${opp.firstName} ${opp.lastName}` : "TBD"; const sched = (item.match.timeSlot && item.match.court) ? `${item.match.timeSlot} - ${item.match.court}` : "Non planifié"; mListEl.innerHTML += `<div class="p-3 bg-blue-50 border rounded"><p class="font-bold">${item.t.title} (${item.match.round})</p><p>vs <strong>${oppN}</strong></p><p class="text-sm">Status: ${sched}</p></div>`; }); } }
+
+        // --- Admin (fonctions majoritairement identiques) ---
+        function renderAdminDashboard() { const c = document.getElementById('admin-tournament-list'); c.innerHTML = ''; if (!globalTournaments || globalTournaments.length === 0) { c.innerHTML = '<p>Aucun tournoi.</p>'; return; } globalTournaments.forEach(t => { const card = document.createElement('div'); card.className = 'flex justify-between items-center bg-gray-50 p-4 rounded shadow-sm'; card.innerHTML = `<div><h4 class="font-bold text-lg text-blue-700">${t.title}</h4><p class="text-sm">${t.currentRound} (${(t.players||[]).length}/${t.maxPlayers})</p></div><div class="flex gap-2"><button class="admin-manage-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" data-id="${t.id}">Gérer</button><button class="admin-delete-btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-id="${t.id}" data-title="${t.title}">Suppr</button></div>`; card.querySelector('.admin-manage-btn').addEventListener('click', (e) => selectTournament(e.target.dataset.id, 'admin')); card.querySelector('.admin-delete-btn').addEventListener('click', handleDeleteTournament); c.appendChild(card); }); }
+        async function handleAdminCreateTournament(e) { e.preventDefault(); const f=e.target.elements, t={title:f['admin-title'].value, imageUrl:f['admin-image-url'].value||'', maxPlayers:parseInt(f['admin-max-players'].value,10), courtCount:parseInt(f['admin-court-count'].value,10), dayCount:parseInt(f['admin-day-count'].value,10), matchesPerDay:parseInt(f['admin-matches-per-day'].value,10)}; if(!t.title||!t.maxPlayers||!t.courtCount||!t.dayCount||!t.matchesPerDay){showMessage("Erreur","Champs requis");return;} const tM=t.maxPlayers-1, tS=t.courtCount*t.dayCount*t.matchesPerDay; if(tS<tM){showMessage("Erreur Capacité",`Slots:${tS} disponibles, Matchs:${tM} requis.`);return;} try { const nT={...t, players:[], matches:[], news:[], currentRound:'Inscription', createdAt:serverTimestamp(), timeSlots:generateTimeSlots(t.dayCount, t.matchesPerDay), courts:generateCourts(t.courtCount)}; await addDoc(tournamentsCollectionRef, nT); showMessage("Succès", `"${t.title}" créé.`); e.target.reset(); } catch (err) { console.error("Err création:", err); showMessage("Erreur", "Création impossible."); } }
+        function handleDeleteTournament(e) { const id=e.target.dataset.id, title=e.target.dataset.title; showConfirmation("Supprimer?", `Suppr. "${title}" ?`, ()=>deleteTournamentFromFirestore(id)); }
+        async function deleteTournamentFromFirestore(id) { try { await deleteDoc(doc(db, "tournaments", id)); showMessage("Succès", "Supprimé."); } catch (err) { console.error("Err suppr:", err); showMessage("Erreur", "Suppr. impossible."); } }
+        function renderAdminManagementView() { if (!globalState) { goToHome(); return; } document.getElementById('admin-manage-title').innerText = `Gestion: ${globalState.title}`; document.getElementById('admin-registration-panel').classList.add('hidden'); document.getElementById('admin-news-panel').classList.add('hidden'); document.getElementById('admin-scheduling-panel').classList.add('hidden'); document.getElementById('admin-view-bracket-btn').classList.add('hidden'); if (globalState.currentRound === 'Inscription') { const p=document.getElementById('admin-registration-panel'); p.classList.remove('hidden'); document.getElementById('admin-player-count').innerText = (globalState.players||[]).length; document.getElementById('admin-max-player-count').innerText = globalState.maxPlayers; const lEl=document.getElementById('admin-player-list'); lEl.innerHTML = (globalState.players||[]).map(p=>`<p>${p.firstName} ${p.lastName} (${p.tennupId}) - ${p.phone||'N/A'}</p>`).join('') || '<p>Aucun joueur.</p>'; document.getElementById('admin-generate-bracket-btn').classList.toggle('hidden', (globalState.players||[]).length !== globalState.maxPlayers); } else { document.getElementById('admin-news-panel').classList.remove('hidden'); document.getElementById('admin-scheduling-panel').classList.remove('hidden'); document.getElementById('admin-current-round').innerText = globalState.currentRound; document.getElementById('schedule-btn').classList.toggle('hidden', globalState.currentRound === 'Terminé'); if (globalState.currentRound === 'Terminé') document.getElementById('admin-current-round').innerText = "Terminé"; document.getElementById('admin-view-bracket-btn').classList.remove('hidden'); } } 
+        async function handleAdminPostNews() { const i=document.getElementById('admin-news-input'), txt=i.value.trim(); if (!txt || !globalState) return; const nI={id:`news_${Date.now()}`, text:txt, createdAt:serverTimestamp()}; const uN=[nI, ...(globalState.news||[])]; try { await updateDoc(doc(db, "tournaments", selectedTournamentId), {news:uN}); showMessage("Succès", "News publiée."); i.value=''; } catch (err) { console.error("Err news:", err); showMessage("Erreur", "Publi impossible."); } }
+        async function handleGenerateBracket() { if (!globalState || (globalState.players||[]).length !== globalState.maxPlayers) { showMessage("Erreur", "Nb joueurs"); return; } let ps=[...globalState.players].sort(()=>0.5-Math.random()); const fR=getRounds(globalState.maxPlayers)[0]; let ms=[]; for(let i=0;i<ps.length;i+=2) ms.push({id:`match_${fR}_${i/2+1}`, round:fR, matchNumber:i/2+1, player1Id:ps[i].id, player2Id:ps[i+1].id, winnerId:null, score:"", nextMatchId:null, timeSlot:null, court:null}); const rs=getRounds(globalState.maxPlayers); let pRms=ms; for(let r=1;r<rs.length;r++){ const rN=rs[r], cRms=[]; for(let i=0;i<pRms.length;i+=2){ const mId=`match_${rN}_${i/2+1}`; const m={id:mId, round:rN, matchNumber:i/2+1, player1Id:null, player2Id:null, winnerId:null, score:"", nextMatchId:(rN==='Finale')?null:`match_${rs[r+1]}_${Math.floor((i/2)/2)+1}`, timeSlot:null, court:null}; ms.push(m); cRms.push(m); if (pRms[i]) pRms[i].nextMatchId=mId; if(pRms[i+1]) pRms[i+1].nextMatchId=mId; } pRms=cRms; } try { await updateDoc(doc(db, "tournaments", selectedTournamentId), {matches:ms, currentRound:fR}); showMessage("Succès", "Tableau généré."); } catch (err) { console.error("Err tableau:", err); showMessage("Erreur", "Gén. tableau impossible."); } }
+        
+        // --- PLANIFICATION (Identique) ---
+        async function generateScheduleForCurrentRound() { 
+            if (!globalState) return; 
+            const cR = globalState.currentRound; 
+            const firstRoundName = getRounds(globalState.maxPlayers)[0]; 
+            const isFirstRound = cR === firstRoundName;
+            
+            const toS = (globalState.matches||[]).filter(m=>m.round===cR && !m.timeSlot); 
+            if (toS.length === 0){ showMessage("Info",`Matchs ${cR} planifiés.`); return; } 
+            
+            const slots=[...(globalState.timeSlots||[])], courts=[...(globalState.courts||[])]; 
+            let grid=[]; slots.forEach(s=>courts.forEach(c=>{if(!(globalState.matches||[]).some(m=>m.timeSlot===s&&m.court===c))grid.push({slot:s, court:c});})); 
+            
+            let sched=[], unsched=[], uM=[...(globalState.matches||[])]; 
+            for (const m of toS){
+                const p1=getPlayerById(m.player1Id), p2=getPlayerById(m.player2Id); 
+                if(!p1||!p2){unsched.push({match:m, reason:"Joueur(s) manquant(s)."}); continue;} 
+                
+                let p1Avail = (p1.availability && p1.availability[cR]) ? p1.availability[cR] : [];
+                if (isFirstRound && p1Avail.length === 0 && p1.availability && p1.availability[PROVISIONAL_AVAIL_KEY]) { p1Avail = p1.availability[PROVISIONAL_AVAIL_KEY]; }
+                let p2Avail = (p2.availability && p2.availability[cR]) ? p2.availability[cR] : [];
+                if (isFirstRound && p2Avail.length === 0 && p2.availability && p2.availability[PROVISIONAL_AVAIL_KEY]) { p2Avail = p2.availability[PROVISIONAL_AVAIL_KEY]; }
+
+                const com=p1Avail.filter(s=>p2Avail.includes(s)); 
+                if(com.length===0){unsched.push({match:m, reason:`Pas créneau commun (${p1Avail.length}/${p2Avail.length})`}); continue;} 
+                
+                let ass=null; 
+                for(const cSlot of com){ const aG=grid.find(g=>g.slot===cSlot); if(aG){ass=aG; grid=grid.filter(g=>!(g.slot===ass.slot&&g.court===ass.court)); break;} } 
+                
+                if(ass){const mIx=uM.findIndex(match=>match.id===m.id); if(mIx > -1){ uM[mIx].timeSlot=ass.slot; uM[mIx].court=ass.court; sched.push(uM[mIx]); } } 
+                else {unsched.push({match:m, reason:"Plus terrains dispos sur créneaux communs."});}
+            } 
+            try {await updateDoc(doc(db,"tournaments",selectedTournamentId),{matches:uM}); showMessage("Planning généré",`${sched.length} planifiés, ${unsched.length} en attente.`); renderSchedulingResults(sched,unsched);} 
+            catch(err){console.error("Err plan:",err); showMessage("Erreur","Save plan impossible.");}
+        }
+        function renderSchedulingResults(sched, unsched) { const sEl=document.getElementById('admin-schedule-output'), cEl=document.getElementById('admin-conflicts-output'); sEl.innerHTML='<h4 class="font-semibold text-green-700">Planifiés</h4>'; if(sched.length>0){sched.forEach(m=>{const p1=getPlayerById(m.player1Id),p2=getPlayerById(m.player2Id); sEl.innerHTML+=`<p class="p-2 bg-green-50 rounded text-sm"><strong>${p1?p1.firstName:'?'} vs ${p2?p2.firstName:'?'}</strong><br>${m.timeSlot} - ${m.court}</p>`;});} else {sEl.innerHTML+='<p class="text-sm text-gray-500">Aucun.</p>';} cEl.innerHTML='<h4 class="font-semibold text-red-700 mt-4">Non planifiés</h4>'; if(unsched.length>0){unsched.forEach(item=>{const p1=getPlayerById(item.match.player1Id),p2=getPlayerById(item.match.player2Id); cEl.innerHTML+=`<p class="p-2 bg-red-50 rounded text-sm"><strong>${p1?p1.firstName:'TBD'} vs ${p2?p2.firstName:'TBD'}</strong><br>${item.reason}</p>`;});} else {cEl.innerHTML+='<p class="text-sm text-gray-500">Aucun.</p>';} }
+        
+        // --- Tableau (Identique) ---
+        function renderBracket() { 
+            if (!globalState || !globalState.matches || globalState.matches.length === 0) { 
+                const bracketView = document.getElementById('tournament-bracket-view');
+                if (bracketView) bracketView.classList.remove('active'); 
+                return; 
+            }
+            // Assurer que la vue est active si on doit la rendre
+            if (currentView === 'tournamentBracket') {
+                const bracketView = document.getElementById('tournament-bracket-view');
+                if (bracketView) bracketView.classList.add('active');
+            } else {
+                return; // Ne pas rendre si ce n'est pas la vue active
+            }
+
+            document.getElementById('bracket-view-title').innerText = `Tableau: ${globalState.title}`;
+            const output = document.getElementById('bracket-output'); output.innerHTML = ''; 
+            const rounds = getRounds(globalState.maxPlayers); const isAdmin = isAdminLoggedIn; 
+            rounds.forEach((rName, idx) => { 
+                const rEl = document.createElement('div'); rEl.className = `round round-${idx + 1} ${rName === 'Finale' ? 'round-final' : ''}`; 
+                const titleEl = document.createElement('h3'); titleEl.className = 'text-lg font-semibold text-center mb-3 text-gray-600'; titleEl.innerText = rName; rEl.appendChild(titleEl);
+                
+                const matchesInR = (globalState.matches || []).filter(m => m.round === rName).sort((a, b) => a.matchNumber - b.matchNumber); 
+                matchesInR.forEach(m => rEl.appendChild(renderMatchup(m, isAdmin))); 
+                output.appendChild(rEl); 
+            }); 
+            const finalM = (globalState.matches || []).find(m => m.round === 'Finale'); 
+            if (finalM && finalM.winnerId) { 
+                const winner = getPlayerById(finalM.winnerId); 
+                const winnerEl = document.createElement('div'); winnerEl.className = 'round champion'; 
+                winnerEl.innerHTML = `<h3 class="text-lg font-semibold text-center mb-3 text-gray-600">Vainqueur</h3><div class="matchup"><div class="matchup-content is-winner"><div class="player player-winner"><span class="player-name">🏆 ${winner?`${winner.firstName} ${winner.lastName}`:'?'}</span></div><div class="match-details">Score: ${finalM.score||'N/A'}</div></div></div>`; 
+                output.appendChild(winnerEl); 
+            } 
+        }
+        function renderMatchup(match, isAdmin) { const mEl=document.createElement('div'); mEl.className='matchup'; const p1=getPlayerById(match.player1Id), p2=getPlayerById(match.player2Id); const p1N=p1?`${p1.firstName} ${p1.lastName}`:'<i>TBD</i>', p2N=p2?`${p2.firstName} ${p2.lastName}`:'<i>TBD</i>'; const isP1W=match.winnerId===match.player1Id, isP2W=match.winnerId===match.player2Id, isFin=!!match.winnerId; let det='Non planifié'; if(match.score) det=`Score: <strong>${match.score}</strong>`; else if(match.timeSlot&&match.court) det=`${match.timeSlot} - ${match.court}`; let adminC=''; if(isAdmin&&!isFin&&p1&&p2){adminC=`<div class="match-admin-controls" data-match-id="${match.id}"><select class="admin-winner-select"><option value="">-- Vainqueur --</option><option value="${p1.id}">${p1N}</option><option value="${p2.id}">${p2N}</option></select><input type="text" class="admin-score-input" placeholder="Score (6-2 6-4)"><button class="admin-save-score-btn">OK</button></div>`;} mEl.innerHTML=`<div class="matchup-content ${isFin?(isP1W||isP2W?'is-winner':'is-loser'):''}"><div class="player ${isFin?(isP1W?'player-winner':'player-loser'):''}"><span class="player-name">${p1N}</span></div><div class="player ${isFin?(isP2W?'player-winner':'player-loser'):''}"><span class="player-name">${p2N}</span></div><div class="match-details">${det}</div>${adminC}</div>`; mEl.querySelector('.admin-save-score-btn')?.addEventListener('click',(e)=>{e.stopPropagation(); const c=e.target.closest('.match-admin-controls'); const mId=c.dataset.matchId, wId=c.querySelector('.admin-winner-select').value, score=c.querySelector('.admin-score-input').value.trim(); if(!wId){showMessage("Erreur","Choisir vainqueur");return;} if(!score){showMessage("Erreur","Entrer score");return;} handleSaveMatchResult(mId,wId,score);}); return mEl; }
+        async function handleSaveMatchResult(matchId, winnerId, score) { if (!globalState) return; const mIdx = (globalState.matches||[]).findIndex(m => m.id === matchId); if (mIdx === -1) { console.error("Match non trouvé:", matchId); return; } const cM = globalState.matches[mIdx]; const nMIdx = (globalState.matches||[]).findIndex(m => m.id === cM.nextMatchId); let uM = [...(globalState.matches||[])]; uM[mIdx] = { ...cM, winnerId: winnerId, score: score }; if (nMIdx !== -1) { const nM = { ...uM[nMIdx] }; if (cM.matchNumber % 2 === 1) nM.player1Id = winnerId; else nM.player2Id = winnerId; uM[nMIdx] = nM; } let nextR = globalState.currentRound; let uN = [...(globalState.news||[])]; const matchesInR = uM.filter(m => m.round === globalState.currentRound); const allFin = matchesInR.length > 0 && matchesInR.every(m => m.winnerId); if (allFin) { const rs = getRounds(globalState.maxPlayers); const cRIdx = rs.indexOf(globalState.currentRound); if (cRIdx < rs.length - 1) { nextR = rs[cRIdx + 1]; uN.unshift({ id: `news_${Date.now()}`, text: `Tour '${nextR}' ouvert. Mettez à jour vos disponibilités !`, createdAt: serverTimestamp() }); } else { nextR = "Terminé"; const winner = getPlayerById(winnerId); const winnerN = winner ? `${winner.firstName} ${winner.lastName}` : 'Vainqueur'; uN.unshift({ id: `news_${Date.now()}`, text: `Tournoi terminé ! Bravo à ${winnerN} !`, createdAt: serverTimestamp() }); } } try { await updateDoc(doc(db, "tournaments", selectedTournamentId), { matches: uM, currentRound: nextR, news: uN }); console.log(`Résultat ${matchId} OK. Tour: ${nextR}`); } catch (err) { console.error("Err résultat:", err); showMessage("Erreur", "Save résultat impossible."); } }
+        
+        // --- Utils (Identique) ---
+        function getPlayerById(id, tournament = globalState) { if (!tournament || !id || !tournament.players) return null; return tournament.players.find(p => p.id === id); } 
+        function showMessage(title, text) { document.getElementById('message-title').innerText = title; document.getElementById('message-text').innerText = text; document.getElementById('message-modal').classList.remove('hidden'); }
+        function showConfirmation(title, text, callback) { document.getElementById('confirm-title').innerText = title; document.getElementById('confirm-text').innerText = text; confirmCallback = callback; document.getElementById('confirm-modal').classList.remove('hidden'); }
+        function levenshteinDistance(a="", b="") { a=String(a); b=String(b); const an=a.length, bn=b.length; if(an===0)return bn; if(bn===0)return an; const matrix = Array(an+1).fill(0).map(()=>Array(bn+1).fill(0)); for(let i=0;i<=an;i++)matrix[i][0]=i; for(let j=0;j<=bn;j++)matrix[0][j]=j; for(let i=1;i<=an;i++){for(let j=1;j<=bn;j++){const cost=a[i-1]===b[j-1]?0:1; matrix[i][j]=Math.min(matrix[i-1][j]+1, matrix[i][j-1]+1, matrix[i-1][j-1]+cost);}} return matrix[an][bn]; }
+        function getRounds(playerCount) { if(!playerCount || playerCount < 2) return []; const rs = []; let c = playerCount; while(c>=2){ if(c===2)rs.push('Finale'); else if(c===4)rs.push('Demi-finale'); else if(c===8)rs.push('Quart de finale'); else rs.push(`${c/2}ème de finale`); c=Math.floor(c/2); } return rs; } 
+        function generateTimeSlots(dayCount, matchesPerDay) { const slots = []; const hours = ['09h','11h','14h','16h','18h','20h','21h']; for(let d=1; d<=dayCount; d++){ for(let i=0; i<matchesPerDay; i++){ let slotName = hours[i] ? `${hours[i]}` : `Créneau ${i+1}`; slots.push(`Jour ${d} - ${slotName}`); } } return slots; }
+        function generateCourts(courtCount) { return Array.from({length: courtCount}, (_, i) => `Terrain ${i + 1}`); }
+
+    </script>
+</body>
+</html>
